@@ -5,13 +5,15 @@
 ## and deep learning (for the stochastic part).
 
 ## environment and imports
+import sys
+import numpy as np
+import pandas as pd
 
 ## Stochastic part
 
 # various kinds of networks to be used all using Keras
 # DNN
 # RNN
-
 
 ## Deterministic part
 
@@ -26,8 +28,15 @@
 #### Main work #######
 
 # parse input arguments
+ctlfile=sys.argv[1]
 
-# data load into global dataframe
+# data load into global variable alldata
+alldata = []
+fp=open(ctlfile,"r")
+for emaline in fp:
+	ln = emaline.strip()
+	tmp = np.loadtxt(ln)
+	alldata.append(np.asarray(tmp))
 
 # data preprocessing - normalizations, make non-negative etc.
 
