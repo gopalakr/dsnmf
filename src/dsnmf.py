@@ -8,6 +8,8 @@
 import sys
 import numpy as np
 import pandas as pd
+from sklearn import preprocessing
+from sklearn.cluster import KMeans
 
 ## Stochastic part
 
@@ -28,7 +30,11 @@ import pandas as pd
 #### Main work #######
 
 # parse input arguments
-ctlfile=sys.argv[1]
+ctlfile = sys.argv[1]
+rdim = int(sys.argv[2])
+twin = int(sys.argv[3])
+halfwin=int(np.floor(twin/2))
+remwin=twin-halfwin
 
 # data load into global variable alldata
 alldata = []
@@ -37,14 +43,46 @@ for emaline in fp:
 	ln = emaline.strip()
 	tmp = np.loadtxt(ln)
 	alldata.append(np.asarray(tmp))
-
+	
 # data preprocessing - normalizations, make non-negative etc.
+nfiles = np.shape(alldata)[0]
+ndim = np.shape(alldata[0])[1]
+print nfiles,ndim
+#make global tensor V
+unnormV=np.empty((0,ndim),float)
+for i in range(nfiles):
+	unnormV=np.vstack((unnormV, alldata[i]))
 
-# initial work
+# initial stats
+scaler = preprocessing.StandardScaler().fit(unnormV)
+normV = scaler.transform(unnormV)
+minn = normV.min()
+normV=np.empty((0,ndim),float)
+V=np.empty((0,ndim),float)
+tandemV=np.empty((0,twin*ndim),float)
 
 ## tandem tensor creation
+for i in range(nfiles):
+	tempV=alldata[i]
+	nr=np.shape(tempV)[0]
+	normtempV=scaler.transform(tempV)
+	nonnegtempV=normtempV[halfwin:nr-remwin,:]-minn
+	normV=normtempV-minn
+	V=np.vstack((V,nonnegtempV))
+	tmptandv=np.empty((nr-twin,0),float)
+	for j in range(-1*halfwin,remwin):
+		tmpb=normV[halfwin+j:nr-remwin+j,:]
+		tmptandv=np.hstack((tmptandv,tmpb))
 
-# k means clustering (mahalanobis)
+	tandemV=np.vstack((tandemV,tmptandv))
+
+	
+print np.shape(V)
+print np.shape(tandemV)
+
+# k means clustering (mahalanobis ?)
+kmeans=KMeans(n_clusters=rdim,n_jobs=7).fit(tandemV)
+print np.shape(kmeans.cluster_centers_)
 
 # init H as cosine distance between tandem tensors and respective k-mean centroids
 
