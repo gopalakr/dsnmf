@@ -56,6 +56,7 @@ for i in range(nfiles):
 # initial stats
 scaler = preprocessing.StandardScaler().fit(unnormV)
 normV = scaler.transform(unnormV)
+np.savetxt('unnormV.txt',unnormV)
 minn = normV.min()
 normV=np.empty((0,ndim),float)
 V=np.empty((0,ndim),float)
@@ -81,10 +82,18 @@ print np.shape(V)
 print np.shape(tandemV)
 
 # k means clustering (mahalanobis ?)
-kmeans=KMeans(n_clusters=rdim,n_jobs=7).fit(tandemV)
+kmeans=KMeans(n_clusters=rdim,n_jobs=7,init='k-means++').fit(tandemV)
 print np.shape(kmeans.cluster_centers_)
 
 # init H as cosine distance between tandem tensors and respective k-mean centroids
+nr=np.shape(V)[0]
+tmpa=preprocessing.normalize(kmeans.cluster_centers_,norm='l2')
+tmpb=preprocessing.normalize(tandemV,norm='l2')
+H=np.matmul(tmpa,tmpb.transpose())
+print np.shape(H)
+np.savetxt('H.txt',H)
+np.savetxt('normkmeans.txt',tmpa)
+np.savetxt('kmeans.txt',kmeans.cluster_centers_)
 
 # loop windows of size \tau through dataframe and compute instantaneous Ws 
 # via spikyH and WgivenH
