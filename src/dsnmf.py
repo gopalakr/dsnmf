@@ -10,6 +10,7 @@ import numpy as np
 import pandas as pd
 from sklearn import preprocessing
 from sklearn.cluster import KMeans
+from scipy.ndimage.interpolation import shift
 
 ## Stochastic part
 
@@ -19,17 +20,43 @@ from sklearn.cluster import KMeans
 
 ## Deterministic part
 
-# convolutional nmf reconstruction
+#Convolutional nmf reconstruction
+def reconstructV(W,H):
+	rdim=np.shape(W)[0]
+	ndim=np.shape(W)[1]
+	twin=np.shape(W)[2]
+	ncols=np.shape(H)[1]
+	V=np.empty((ndim,ncols),float)
+	for i in range(twin):
+		wi=W[:,:,i]
+		hi=shift(H,i)
+		V+=np.dot(np.transpose(wi),hi)
+	return V
 
-# Update H given W
+#Update H given W
+def updateH(V,W,H):
+	
 
-# Update P(W|H) 
+#Update P(W|H)
+def updateWgivenH(V,W,H):
+
+#Update W for a given H
+def UpdateW(V, W, H):
+	
 
 ## Misc functions
+def load_files(ctlfile):
+	alldata = []
+	fp=open(ctlfile,"r")
+	for emaline in fp:
+		ln = emaline.strip()
+		tmp = np.loadtxt(ln)
+		alldata.append(np.asarray(tmp))
+	return alldata
 
 #### Main work #######
 
-# parse input arguments
+### parse input arguments
 ctlfile = sys.argv[1]
 rdim = int(sys.argv[2])
 twin = int(sys.argv[3])
@@ -37,17 +64,13 @@ halfwin=int(np.floor(twin/2))
 remwin=twin-halfwin
 
 # data load into global variable alldata
-alldata = []
-fp=open(ctlfile,"r")
-for emaline in fp:
-	ln = emaline.strip()
-	tmp = np.loadtxt(ln)
-	alldata.append(np.asarray(tmp))
-	
+alldata=load_files(ctlfile)
+
 # data preprocessing - normalizations, make non-negative etc.
 nfiles = np.shape(alldata)[0]
 ndim = np.shape(alldata[0])[1]
 print nfiles,ndim
+
 #make global tensor V
 unnormV=np.empty((0,ndim),float)
 for i in range(nfiles):
@@ -99,6 +122,8 @@ np.savetxt('kmeans.txt',kmeans.cluster_centers_)
 # via spikyH and WgivenH
 # or Ws and Hs, ignore the Hs over each analysis window
 # or process sets of trails in batch, ignore Hs
+
+
 
 # Train a network for predicting W given H
 
