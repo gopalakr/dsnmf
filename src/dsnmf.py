@@ -28,22 +28,22 @@ def reconstructV(W,H):
 	ncols=np.shape(H)[1]
 	V=np.empty((ndim,ncols),float)
 	for i in range(twin):
-		wi=W[:,:,i]
+		wi=np.squeeze(W[:,:,i])
 		hi=shift(H,i)
 		V+=np.dot(wi,hi)
 	return V
 
 #Update H given W
 def updateH(V,Vhat,W,H):
-	rdim=np.shape(W)[0]
-	ndim=np.shape(W)[1]
+	ndim=np.shape(W)[0]
+	rdim=np.shape(W)[1]
 	twin=np.shape(W)[2]
 	ncols=np.shape(H)[1]
 	scale=np.divide(V,Vhat)
 	onm=np.ones((ndim,ncols))
 	newH=np.empty((rdim,ncols))
 	for i in range(twin):
-		wi=W[:,:,i]
+		wi=np.squeeze(W[:,:,i])
 		vshift=shift(scale,-1*i)
 		numerator=np.dot(np.transpose(wi),vshift)
 		denominator=np.dot(np.transpose(wi),onm)
@@ -56,21 +56,23 @@ def updateH(V,Vhat,W,H):
 
 #Update W for a given H
 def UpdateW(V, Vhat, W, H):
-	rdim=np.shape(W)[0]
-	ndim=np.shape(W)[1]
+	ndim=np.shape(W)[0]
+	rdim=np.shape(W)[1]
 	twin=np.shape(W)[2]
 	ncols=np.shape(H)[1]
 	scale=np.divide(V,Vhat)
 	onm=np.ones((ndim,ncols))
-	newW=np.empty((rdim,ndim,twin))
+	newW=[]
 	for i in range(twin):
-		wi=W[:,:,i]
-		hi=shift(H,i)
+		wi=np.squeeze(W[:,:,i])
+		hi=np.roll(H,i)
 		numerator=np.dot(scale,np.transpose(hi))
 		denominator=np.dot(onm,np.transpose(hi))
 		wtmp=np.divide(numerator,denominator)
-		newW=newW.append(np.multiply(wi,wtmp))
-	return newW
+		wtmp=np.multiply(wi,wtmp)
+		newW.append(np.transpose(wtmp))
+	W=np.swapaxes(newW,0,3)
+	return W
 		
 	
 ## Misc functions
@@ -142,6 +144,7 @@ nr=np.shape(V)[0]
 tmpa=preprocessing.normalize(kmeans.cluster_centers_,norm='l2')
 tmpb=preprocessing.normalize(tandemV,norm='l2')
 H=np.matmul(tmpa,tmpb.transpose())
+H=np.random.rand(rdim, nr)
 W=np.random.rand(ndim,rdim,twin)
 #print np.shape(H)
 #np.savetxt('H.txt',H)
@@ -166,11 +169,13 @@ V=np.transpose(V)
 for itr in range(5):
 	Vhat=reconstructV(W,H)
 	Wnew=UpdateW(V,Vhat,W,H)
+	print np.shape(W), np.shape(Wnew)
 	W=Wnew
 	Vhat=reconstructV(W,H)
 	V=Vhat
 	Hnew=updateH(V,Vhat,W,H)
 	H=Hnew
+	print np.linalg.norm(V-Vhat)
 # Update P(W|H)
 #	- Foreach sentence
 #	- Process H as necessary (smoothH or otherwise)
