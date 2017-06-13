@@ -22,28 +22,57 @@ from scipy.ndimage.interpolation import shift
 
 #Convolutional nmf reconstruction
 def reconstructV(W,H):
-	rdim=np.shape(W)[0]
-	ndim=np.shape(W)[1]
+	ndim=np.shape(W)[0]
+	rdim=np.shape(W)[1]
 	twin=np.shape(W)[2]
 	ncols=np.shape(H)[1]
 	V=np.empty((ndim,ncols),float)
 	for i in range(twin):
 		wi=W[:,:,i]
 		hi=shift(H,i)
-		V+=np.dot(np.transpose(wi),hi)
+		V+=np.dot(wi,hi)
 	return V
 
 #Update H given W
-def updateH(V,W,H):
-	
+def updateH(V,Vhat,W,H):
+	rdim=np.shape(W)[0]
+	ndim=np.shape(W)[1]
+	twin=np.shape(W)[2]
+	ncols=np.shape(H)[1]
+	scale=np.divide(V,Vhat)
+	onm=np.ones((ndim,ncols))
+	newH=np.empty((rdim,ncols))
+	for i in range(twin):
+		wi=W[:,:,i]
+		vshift=shift(scale,-1*i)
+		numerator=np.dot(np.transpose(wi),vshift)
+		denominator=np.dot(np.transpose(wi),onm)
+		tmph=np.divide(numerator,denominator)
+		newH=newH+np.multiply(tmph,H)
+	return np.divide(newH,twin)
 
 #Update P(W|H)
-def updateWgivenH(V,W,H):
+#def updateWgivenH(V,W,H):
 
 #Update W for a given H
-def UpdateW(V, W, H):
+def UpdateW(V, Vhat, W, H):
+	rdim=np.shape(W)[0]
+	ndim=np.shape(W)[1]
+	twin=np.shape(W)[2]
+	ncols=np.shape(H)[1]
+	scale=np.divide(V,Vhat)
+	onm=np.ones((ndim,ncols))
+	newW=np.empty((rdim,ndim,twin))
+	for i in range(twin):
+		wi=W[:,:,i]
+		hi=shift(H,i)
+		numerator=np.dot(scale,np.transpose(hi))
+		denominator=np.dot(onm,np.transpose(hi))
+		wtmp=np.divide(numerator,denominator)
+		newW=newW.append(np.multiply(wi,wtmp))
+	return newW
+		
 	
-
 ## Misc functions
 def load_files(ctlfile):
 	alldata = []
@@ -113,17 +142,18 @@ nr=np.shape(V)[0]
 tmpa=preprocessing.normalize(kmeans.cluster_centers_,norm='l2')
 tmpb=preprocessing.normalize(tandemV,norm='l2')
 H=np.matmul(tmpa,tmpb.transpose())
-print np.shape(H)
-np.savetxt('H.txt',H)
-np.savetxt('normkmeans.txt',tmpa)
-np.savetxt('kmeans.txt',kmeans.cluster_centers_)
+W=np.random.rand(ndim,rdim,twin)
+#print np.shape(H)
+#np.savetxt('H.txt',H)
+#np.savetxt('normkmeans.txt',tmpa)
+#np.savetxt('kmeans.txt',kmeans.cluster_centers_)
+V=np.transpose(V)
+#H=np.transpose(H)
 
 # loop windows of size \tau through dataframe and compute instantaneous Ws 
 # via spikyH and WgivenH
 # or Ws and Hs, ignore the Hs over each analysis window
 # or process sets of trails in batch, ignore Hs
-
-
 
 # Train a network for predicting W given H
 
@@ -133,7 +163,14 @@ np.savetxt('kmeans.txt',kmeans.cluster_centers_)
 #	- Foreach sentence
 # 	- Estimate W tensor from trained network
 #	- Update HgivenW over several iterations
-
+for itr in range(5):
+	Vhat=reconstructV(W,H)
+	Wnew=UpdateW(V,Vhat,W,H)
+	W=Wnew
+	Vhat=reconstructV(W,H)
+	V=Vhat
+	Hnew=updateH(V,Vhat,W,H)
+	H=Hnew
 # Update P(W|H)
 #	- Foreach sentence
 #	- Process H as necessary (smoothH or otherwise)
