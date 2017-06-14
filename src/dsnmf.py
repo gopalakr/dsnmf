@@ -41,14 +41,14 @@ def updateH(V,Vhat,W,H):
 	ncols=np.shape(H)[1]
 	scale=np.divide(V,Vhat)
 	onm=np.ones((ndim,ncols))
-	newH=np.empty((rdim,ncols))
+	newH=np.zeros((rdim,ncols))
 	for i in range(twin):
 		wi=np.squeeze(W[:,:,i])
 		vshift=shift(scale,-1*i)
 		numerator=np.dot(np.transpose(wi),vshift)
 		denominator=np.dot(np.transpose(wi),onm)
 		tmph=np.divide(numerator,denominator)
-		newH=newH+np.multiply(tmph,H)
+		newH+=np.multiply(tmph,H)
 	return np.divide(newH,twin)
 
 #Update P(W|H)
@@ -62,17 +62,18 @@ def UpdateW(V, Vhat, W, H):
 	ncols=np.shape(H)[1]
 	scale=np.divide(V,Vhat)
 	onm=np.ones((ndim,ncols))
-	newW=[]
+	newW=np.empty((ndim,rdim,twin),float)
 	for i in range(twin):
 		wi=np.squeeze(W[:,:,i])
 		hi=np.roll(H,i)
 		numerator=np.dot(scale,np.transpose(hi))
 		denominator=np.dot(onm,np.transpose(hi))
 		wtmp=np.divide(numerator,denominator)
-		wtmp=np.multiply(wi,wtmp)
-		newW.append(np.transpose(wtmp))
-	W=np.swapaxes(newW,0,3)
-	return W
+		wtmpi=np.multiply(wi,wtmp)
+		#newW.append(np.transpose(wtmp))
+		newW[:,:,i]=wtmpi
+#	W=np.swapaxes(newW,0,3)
+	return newW
 		
 	
 ## Misc functions
@@ -132,7 +133,6 @@ for i in range(nfiles):
 	tandemV=np.vstack((tandemV,tmptandv))
 
 	
-print np.shape(V)
 print np.shape(tandemV)
 
 # k means clustering (mahalanobis ?)
@@ -144,7 +144,6 @@ nr=np.shape(V)[0]
 tmpa=preprocessing.normalize(kmeans.cluster_centers_,norm='l2')
 tmpb=preprocessing.normalize(tandemV,norm='l2')
 H=np.matmul(tmpa,tmpb.transpose())
-H=np.random.rand(rdim, nr)
 W=np.random.rand(ndim,rdim,twin)
 #print np.shape(H)
 #np.savetxt('H.txt',H)
@@ -152,6 +151,10 @@ W=np.random.rand(ndim,rdim,twin)
 #np.savetxt('kmeans.txt',kmeans.cluster_centers_)
 V=np.transpose(V)
 #H=np.transpose(H)
+print "V: ", np.shape(V)
+print "W: ", np.shape(W)
+print "H: ", np.shape(H)
+print V.min(),H.min(),W.min()
 
 # loop windows of size \tau through dataframe and compute instantaneous Ws 
 # via spikyH and WgivenH
@@ -162,20 +165,19 @@ V=np.transpose(V)
 
 ## Unto convergence by looping over all data
 
+H=preprocessing.normalize(H,norm='l1')
 # Update H given E[W|H]
 #	- Foreach sentence
 # 	- Estimate W tensor from trained network
 #	- Update HgivenW over several iterations
-for itr in range(5):
+for itr in range(50):
 	Vhat=reconstructV(W,H)
+	print np.linalg.norm(np.subtract(V,Vhat))
 	Wnew=UpdateW(V,Vhat,W,H)
-	print np.shape(W), np.shape(Wnew)
 	W=Wnew
 	Vhat=reconstructV(W,H)
-	V=Vhat
 	Hnew=updateH(V,Vhat,W,H)
-	H=Hnew
-	print np.linalg.norm(V-Vhat)
+	H=preprocessing.normalize(Hnew,norm='l1')
 # Update P(W|H)
 #	- Foreach sentence
 #	- Process H as necessary (smoothH or otherwise)
@@ -184,3 +186,8 @@ for itr in range(5):
 # trained activations and network
 
 # Update P(W|H) 
+H=np.transpose(H)
+V=np.transpose(V)
+np.savetxt('H.txt',H)
+np.savetxt('W.txt',W)
+np.ndarray.('V.txt',V)
