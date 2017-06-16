@@ -12,6 +12,8 @@ from sklearn import preprocessing
 from sklearn.cluster import KMeans
 from scipy.ndimage.interpolation import shift
 
+lowval=0
+
 ## Stochastic part
 
 # various kinds of networks to be used all using Keras
@@ -26,7 +28,7 @@ def reconstructV(W,H):
 	rdim=np.shape(W)[1]
 	twin=np.shape(W)[2]
 	ncols=np.shape(H)[1]
-	V=np.empty((ndim,ncols),float)
+	V=np.zeros((ndim,ncols),float)
 	for i in range(twin):
 		wi=np.squeeze(W[:,:,i])
 		hi=shift(H,i)
@@ -47,7 +49,9 @@ def updateH(V,Vhat,W,H):
 		vshift=shift(scale,-1*i)
 		numerator=np.dot(np.transpose(wi),vshift)
 		denominator=np.dot(np.transpose(wi),onm)
+		denominator[denominator < lowval]=lowval
 		tmph=np.divide(numerator,denominator)
+		tmph[np.isnan(tmph)]=lowval
 		newH+=np.multiply(tmph,H)
 	return np.divide(newH,twin)
 
@@ -65,10 +69,13 @@ def UpdateW(V, Vhat, W, H):
 	newW=np.empty((ndim,rdim,twin),float)
 	for i in range(twin):
 		wi=np.squeeze(W[:,:,i])
-		hi=np.roll(H,i)
+		#hi=np.roll(H,i)
+		hi=shift(H,i)
 		numerator=np.dot(scale,np.transpose(hi))
 		denominator=np.dot(onm,np.transpose(hi))
+		denominator[denominator < lowval]=lowval
 		wtmp=np.divide(numerator,denominator)
+		wtmp[np.isnan(wtmp)]=lowval
 		wtmpi=np.multiply(wi,wtmp)
 		#newW.append(np.transpose(wtmp))
 		newW[:,:,i]=wtmpi
@@ -170,7 +177,7 @@ H=preprocessing.normalize(H,norm='l1')
 #	- Foreach sentence
 # 	- Estimate W tensor from trained network
 #	- Update HgivenW over several iterations
-for itr in range(50):
+for itr in range(200):
 	Vhat=reconstructV(W,H)
 	print np.linalg.norm(np.subtract(V,Vhat))
 	Wnew=UpdateW(V,Vhat,W,H)
@@ -188,6 +195,8 @@ for itr in range(50):
 # Update P(W|H) 
 H=np.transpose(H)
 V=np.transpose(V)
+Vhat=np.transpose(Vhat)
 np.savetxt('H.txt',H)
-np.savetxt('W.txt',W)
-np.ndarray.('V.txt',V)
+np.savetxt('V.txt',V)
+np.savetxt('newV.txt',Vhat)
+np.save('W.npy',W)
