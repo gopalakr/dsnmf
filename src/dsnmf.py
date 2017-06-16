@@ -11,6 +11,9 @@ import pandas as pd
 from sklearn import preprocessing
 from sklearn.cluster import KMeans
 from scipy.ndimage.interpolation import shift
+from keras.models import Sequential
+from keras.layers.core import Dense,Activation,Dropout
+
 
 lowval=0
 
@@ -58,6 +61,16 @@ def updateH(V,Vhat,W,H):
 #Update P(W|H)
 #def updateWgivenH(V,W,H):
 
+def smaragdis_updates(V,W,H):
+	Vhat=reconstructV(W,H)
+	print(np.linalg.norm(np.subtract(V,Vhat)))
+	Wnew=UpdateW(V,Vhat,W,H)
+	W=Wnew
+	Vhat=reconstructV(W,H)
+	Hnew=updateH(V,Vhat,W,H)
+	H=preprocessing.normalize(Hnew,norm='l1')
+	return Vhat, W, H
+
 #Update W for a given H
 def UpdateW(V, Vhat, W, H):
 	ndim=np.shape(W)[0]
@@ -77,9 +90,7 @@ def UpdateW(V, Vhat, W, H):
 		wtmp=np.divide(numerator,denominator)
 		wtmp[np.isnan(wtmp)]=lowval
 		wtmpi=np.multiply(wi,wtmp)
-		#newW.append(np.transpose(wtmp))
 		newW[:,:,i]=wtmpi
-#	W=np.swapaxes(newW,0,3)
 	return newW
 		
 	
@@ -108,7 +119,6 @@ alldata=load_files(ctlfile)
 # data preprocessing - normalizations, make non-negative etc.
 nfiles = np.shape(alldata)[0]
 ndim = np.shape(alldata[0])[1]
-print nfiles,ndim
 
 #make global tensor V
 unnormV=np.empty((0,ndim),float)
@@ -124,7 +134,7 @@ normV=np.empty((0,ndim),float)
 V=np.empty((0,ndim),float)
 tandemV=np.empty((0,twin*ndim),float)
 
-## tandem tensor creation
+## tandem tensor creation for smaragdis updates
 for i in range(nfiles):
 	tempV=alldata[i]
 	nr=np.shape(tempV)[0]
@@ -140,28 +150,21 @@ for i in range(nfiles):
 	tandemV=np.vstack((tandemV,tmptandv))
 
 	
-print np.shape(tandemV)
+print(np.shape(tandemV))
 
 # k means clustering (mahalanobis ?)
 kmeans=KMeans(n_clusters=rdim,n_jobs=7,init='k-means++').fit(tandemV)
-print np.shape(kmeans.cluster_centers_)
+print(np.shape(kmeans.cluster_centers_))
 
 # init H as cosine distance between tandem tensors and respective k-mean centroids
 nr=np.shape(V)[0]
 tmpa=preprocessing.normalize(kmeans.cluster_centers_,norm='l2')
 tmpb=preprocessing.normalize(tandemV,norm='l2')
 H=np.matmul(tmpa,tmpb.transpose())
+H=preprocessing.normalize(H,norm='l1')
 W=np.random.rand(ndim,rdim,twin)
-#print np.shape(H)
-#np.savetxt('H.txt',H)
-#np.savetxt('normkmeans.txt',tmpa)
-#np.savetxt('kmeans.txt',kmeans.cluster_centers_)
 V=np.transpose(V)
-#H=np.transpose(H)
-print "V: ", np.shape(V)
-print "W: ", np.shape(W)
-print "H: ", np.shape(H)
-print V.min(),H.min(),W.min()
+
 
 # loop windows of size \tau through dataframe and compute instantaneous Ws 
 # via spikyH and WgivenH
@@ -172,19 +175,13 @@ print V.min(),H.min(),W.min()
 
 ## Unto convergence by looping over all data
 
-H=preprocessing.normalize(H,norm='l1')
 # Update H given E[W|H]
 #	- Foreach sentence
 # 	- Estimate W tensor from trained network
 #	- Update HgivenW over several iterations
 for itr in range(200):
-	Vhat=reconstructV(W,H)
-	print np.linalg.norm(np.subtract(V,Vhat))
-	Wnew=UpdateW(V,Vhat,W,H)
-	W=Wnew
-	Vhat=reconstructV(W,H)
-	Hnew=updateH(V,Vhat,W,H)
-	H=preprocessing.normalize(Hnew,norm='l1')
+	Vhat,W,H=smaragdis_updates(V,W,H)
+	Vhat,modellist,H=dsnmf_updates(V,W,H)
 # Update P(W|H)
 #	- Foreach sentence
 #	- Process H as necessary (smoothH or otherwise)
