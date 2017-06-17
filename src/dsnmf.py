@@ -104,6 +104,27 @@ def load_files(ctlfile):
 		alldata.append(np.asarray(tmp))
 	return alldata
 
+def make_data_smaragdis(nfiles,alldata,twin,ndim,scaler,halfwin,remwin,minn):
+	normV=np.empty((0,ndim),float)
+	V=np.empty((0,ndim),float)
+	tandemV=np.empty((0,twin*ndim),float)
+
+	## tandem tensor creation for smaragdis updates
+	for i in range(nfiles):
+		tempV=alldata[i]
+		nr=np.shape(tempV)[0]
+		normtempV=scaler.transform(tempV)
+		nonnegtempV=normtempV[halfwin:nr-remwin,:]-minn
+		normV=normtempV-minn
+		V=np.vstack((V,nonnegtempV))
+		tmptandv=np.empty((nr-twin,0),float)
+		for j in range(-1*halfwin,remwin):
+			tmpb=normV[halfwin+j:nr-remwin+j,:]
+			tmptandv=np.hstack((tmptandv,tmpb))
+
+		tandemV=np.vstack((tandemV,tmptandv))
+	return V,normV,tandemV
+	
 #### Main work #######
 
 ### parse input arguments
@@ -130,26 +151,7 @@ scaler = preprocessing.StandardScaler().fit(unnormV)
 normV = scaler.transform(unnormV)
 np.savetxt('unnormV.txt',unnormV)
 minn = normV.min()
-normV=np.empty((0,ndim),float)
-V=np.empty((0,ndim),float)
-tandemV=np.empty((0,twin*ndim),float)
-
-## tandem tensor creation for smaragdis updates
-for i in range(nfiles):
-	tempV=alldata[i]
-	nr=np.shape(tempV)[0]
-	normtempV=scaler.transform(tempV)
-	nonnegtempV=normtempV[halfwin:nr-remwin,:]-minn
-	normV=normtempV-minn
-	V=np.vstack((V,nonnegtempV))
-	tmptandv=np.empty((nr-twin,0),float)
-	for j in range(-1*halfwin,remwin):
-		tmpb=normV[halfwin+j:nr-remwin+j,:]
-		tmptandv=np.hstack((tmptandv,tmpb))
-
-	tandemV=np.vstack((tandemV,tmptandv))
-
-	
+V, normV, tandemV = make_data_smaragdis(nfiles,alldata,twin,ndim,scaler,halfwin,remwin,minn)
 print(np.shape(tandemV))
 
 # k means clustering (mahalanobis ?)
