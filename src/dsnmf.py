@@ -38,6 +38,20 @@ def reconstructV(W,H):
 		V+=np.dot(wi,hi)
 	return V
 
+#Convolutional nmf reconstruction from streams
+def reconstructV_dsnmf(Wstream,Hstream):
+	rdim=np.shape(Hstream)[0]
+	ncols=np.shape(Hstream)[1]
+	twin=np.shape(np.squeeze(Wstream[0,:,:,:]))[2]
+	ndim=np.shape(np.squeeze(Wstream[0,:,:,:]))[0]
+	V=np.zeros((ndim,twin-1),float)
+	for i in range(twin,ncols):
+		witr=np.squeeze(Wstream[i,:,:,:])
+		htmp=Hstream[np.arange(i-twin,i+1)]
+		vtmp=reconstructV(witr,htmp)
+		V=np.hstack(V,np.squeeze(vtmp[:,twin-1]))
+	return V
+
 #Update H given W
 def updateH(V,Vhat,W,H):
 	ndim=np.shape(W)[0]
@@ -93,6 +107,37 @@ def UpdateW(V, Vhat, W, H):
 		newW[:,:,i]=wtmpi
 	return newW
 		
+#UpdateW stream for dsnmf
+def UpdateWstream(V, Vhat, Wstream, Hstream):
+	ndim=np.shape(V)[0]
+	rdim=np.shape(H)[0]
+	twin=np.shape(np.squeeze(Wstream[0]))[2]
+	ncols=np.shape(Hstream)[1]
+	newWstream=[]
+	for i in range(ncols-twin+1):
+		wi=np.squeeze(Wstream[i,:,:,:])
+		hi=Hstream[:,i:twin+i]
+		vi=V[:,i:i+twin]
+		vhat=Vhat[:,i:i+twin]
+		newW=UpdateW(vi,vhat,wi,hi)
+		newWstream.append(newW)
+	return newWstream
+
+#UpdateH stream for dsnmf
+def UpdateHstream(V,Vhat,Wstream,Hstream):
+	ndim=np.shape(V)[0]
+	rdim=np.shape(H)[0]
+	twin=np.shape(np.squeeze(Wstream[0,:,:,:]))[2]
+	ncols=np.shape(H)[1]
+	newHstream=[]
+	for i in range(ncols-twin+1):
+		wi=np.squeeze(Wstream[i,:,:,:])
+		hi=Hstream[:,i:twin+i]
+		vi=V[:,i:i+twin]
+		vhat=Vhat[:,i:i+twin]
+		newH=UpdateH(vi,vhat,wi,hi)
+		newHstream.append(newH)
+	return newHstream
 	
 ## Misc functions
 def load_files(ctlfile):
@@ -103,6 +148,14 @@ def load_files(ctlfile):
 		tmp = np.loadtxt(ln)
 		alldata.append(np.asarray(tmp))
 	return alldata
+
+
+def make_wstream_init(H,W):
+	wstream=[]
+	ncols=np.shape(H)[1]
+	for i in range(ncols):
+		wstream.append(W)
+	return wstream
 
 def make_data_smaragdis(nfiles,alldata,twin,ndim,scaler,halfwin,remwin,minn):
 	normV=np.empty((0,ndim),float)
@@ -166,7 +219,6 @@ H=np.matmul(tmpa,tmpb.transpose())
 H=preprocessing.normalize(H,norm='l1')
 W=np.random.rand(ndim,rdim,twin)
 V=np.transpose(V)
-
 
 # loop windows of size \tau through dataframe and compute instantaneous Ws 
 # via spikyH and WgivenH
