@@ -21,6 +21,25 @@ lowval=0
 
 # various kinds of networks to be used all using Keras
 # DNN
+def train_dnn(X_train, Y_train):
+	indim=np.shape(X_train)[1]
+	outdim=np.shape(Y_train)[1]
+	hidden_neurons=400
+	model=Sequential()
+	model.add(Dense(hidden_neurons,input_dim=indim))
+	model.add(Activation("sigmoid"))
+	model.add(Dropout(0.5))
+	model.add(Dense(hidden_neurons))
+	model.add(Activation("sigmoid"))
+	model.add(Dropout(0.5))
+	model.add(Dense(hidden_neurons))
+	model.add(Activation("sigmoid"))
+	model.add(Dropout(0.5))
+	model.add(Dense(output_dim=outdim))
+	model.add(Activation("linear"))
+	model.compile(loss="mean_squared_error",optimizer="adam")
+	model.fit(X_train,Y_train,batch_size=100, nb_epoch=10, validation_split=0.05)
+	return model
 # RNN
 
 ## Deterministic part
@@ -137,9 +156,55 @@ def UpdateHstream(V,Vhat,Wstream,Hstream):
 		vhat=Vhat[:,i:i+twin]
 		newH=UpdateH(vi,vhat,wi,hi)
 		newHstream.append(newH)
+	newHstream.append(np.zeros(rdim,twin))
 	return newHstream
+
+def dsnmf_updates(alldata,allpred,alldatawstream,alldatahstream):
+	nfiles=np.shape(alldata)[0]
+	allX=[]
+	allY=[]
+	models=[]
+	rdim=np.shape(alldatahstream)[0]
+	for i in range(nfiles):
+		wstream=np.squeeze(alldatawstream[i,:,:,:])
+		hstream=np.squeeze(alldatahstream[i,:,:])
+		v=np.squeeze(alldata[i,:,:])
+		vhat=np.squeeze(allpred[i,:,:])
+		updateWstream(v,vhat,wstream,hstream)
+		tmpa,tmpb=make_traindata(wstream,hstream,twin)
+		allX.append(tmpa)
+		allY.append(tmpb)
+	#Train P(W|H) over all training data
+	nx=np.shape(tmpb)[0]
+	ndim=np.shape(tmpb)[1]
+	rdim=np.shape(tmpb)[3]
+	twin=np.shape(tmpb)[4]
+	for i in range(rdim):
+		tmpallY=allY[:,:,i,:].reshape(nx,ndim*twin)
+		tmpmodel=train_dnn(allX,tmpallY)
+		models.append(tmpmodel)
+
+	#Predict Wstream over all sentences
+	for i in range(nfiles):
+		hstream=np.squeeze(alldatahstream[i,:,:])
+		tmpa=make_testdata(hstream,twin)
+		tmpb=predictws(tmpa)
+		
+
+	#ReconstructV for all sentences
+
+	#UpdateH for all sentences
 	
+	#ReconstructV for all sentences allpred
+
+		
+	
+	return allpred,alldatawstream, alldatahstream, models
+
 ## Misc functions
+#def predictws(models,xdata):
+	
+
 def load_files(ctlfile):
 	alldata = []
 	fp=open(ctlfile,"r")
@@ -177,6 +242,31 @@ def make_data_smaragdis(nfiles,alldata,twin,ndim,scaler,halfwin,remwin,minn):
 
 		tandemV=np.vstack((tandemV,tmptandv))
 	return V,normV,tandemV
+
+def make_traindata(wstream,hstream,padwin):
+	ncols=np.shape(hstream)[1]
+	Xtr=[]
+	Ytr=[]
+	for i in range(padwin,ncols-padwin):
+		xdat=np.flatten(hstream[:,i-padwin:i+padwin])
+		ydat=np.squeeze(wstream[i,:,:,:])
+		#ydat=np.flatten(np.squeeze(wstream[i,:,:,:]))
+		Xtr.append(np.asarray(Xtr))
+		Ytr.append(np.asarray(Ytr))
+
+	return Xtr, Ytr
+
+def make_testdata(hstream,padwin):
+	ncols=np.shape(hstream)[1]
+	rdim=np.shape(hstream)[0]
+	Xtr=np.zeros((padwin,rdim*((2*padwin)-1)))
+	for i in range(padwin,ncols-padwin):
+		xdat=np.flatten(hstream[:,i-padwin:i+padwin])
+		#ydat=np.flatten(np.squeeze(wstream[i,:,:,:]))
+		Xtr.append(np.asarray(Xtr))
+	Xtr.append(np.zeros((padwin,rdim*((2*padwin)-1))))
+	return Xtr()
+
 	
 #### Main work #######
 
