@@ -40,6 +40,9 @@ def train_dnn(X_train, Y_train):
 	model.compile(loss="mean_squared_error",optimizer="adam")
 	model.fit(X_train,Y_train,batch_size=100, nb_epoch=10, validation_split=0.05)
 	return model
+
+def test_dnn(X_test, model):
+	return model.predict(X_test)
 # RNN
 
 ## Deterministic part
@@ -166,7 +169,7 @@ def dsnmf_updates(alldata,allpred,alldatawstream,alldatahstream):
 	models=[]
 	rdim=np.shape(alldatahstream)[0]
 	for i in range(nfiles):
-		wstream=np.squeeze(alldatawstream[i,:,:,:])
+		wstream=np.squeeze(alldatawstream[i,:,:,:,:])
 		hstream=np.squeeze(alldatahstream[i,:,:])
 		v=np.squeeze(alldata[i,:,:])
 		vhat=np.squeeze(allpred[i,:,:])
@@ -188,22 +191,48 @@ def dsnmf_updates(alldata,allpred,alldatawstream,alldatahstream):
 	for i in range(nfiles):
 		hstream=np.squeeze(alldatahstream[i,:,:])
 		tmpa=make_testdata(hstream,twin)
-		tmpb=predictws(tmpa)
-		
+		tmpb=predictws(tmpa,models,ndim,rdim,twin)
+		alldatawstream[i,:,:,:,:]=tmpb
 
 	#ReconstructV for all sentences
+	allpred=[]
+	for i in range(nfiles):
+		hstream=np.squeeze(alldatahstream[i,:,:])
+		wstream=alldatawstream(i)
+		predv=reconstructV_dsnmf(wstream,hstream)
+		allpred.append(predv)
 
 	#UpdateH for all sentences
+	for i in range(nfiles):
+		hstream=np.squeeze(alldatahstream[i,:,:])
+		wstream=np.squeeze(alldatawstream[i,:,:,:,:])
+		v=np.squeeze(alldata[i,:,:])
+		vhat=np.squeeze(allpred[i,:,:])
+		alldatahstream[i,:,:]=UpdateHstream(v,vhat,wstream,hstream)
 	
 	#ReconstructV for all sentences allpred
+	allpred=[]
+	score=0
+	for i in range(nfiles):
+		hstream=np.squeeze(alldatahstream[i,:,:])
+		wstream=alldatawstream[i]
+		v=alldata[i]
+		predv=reconstructV_dsnmf(wstream,hstream)
+		score+=np.linalg.norm(np.subtract(v,vhat))
+		allpred.append(predv)
 
-		
-	
-	return allpred,alldatawstream, alldatahstream, models
+	return allpred,alldatawstream, alldatahstream, models, score
 
 ## Misc functions
-#def predictws(models,xdata):
-	
+def predictws(xdata,models,ndim,rdim,twin):
+	nf=np.shape(xdata)[0]
+	wstream=np.empty((nf,ndim,rdim,twin))
+	for i in range(rdim):
+		tmpmodel=models(i)
+		tmpw=test_dnn(xdata,tmpmodel)
+		tmpw.reshape(nf,ndim,twin)
+		wstream[:,:,i,:]=tmpw
+	return wstream
 
 def load_files(ctlfile):
 	alldata = []
@@ -325,7 +354,25 @@ V=np.transpose(V)
 #	- Update HgivenW over several iterations
 for itr in range(200):
 	Vhat,W,H=smaragdis_updates(V,W,H)
-	Vhat,modellist,H=dsnmf_updates(V,W,H)
+
+allpred=[]
+score=0
+alldatahstream=[]
+alldatawstream=[]
+for i in range(nfiles):
+	nc=np.shape(alldata[i])[1]
+	hstream=np.random.rand(rdim,nc)
+	wstream=make_wstream_init(hstream,W)
+	for itr in range(200):
+		vhat=reconstructV_dsnmf(wstream,hstream)
+		v=np.squeeze(alldata[i])
+		hstream=UpdateHstream(v,vhat,wstream,hstream)
+		score+=np.linalg.norm(np.subtract(v,vhat))
+	print(score)
+
+for itr in range(200):
+	allpred,alldatawstream, alldatahstream, models,score=dsnmf_updates(alldata,allpred,alldatawstream,alldatahstream)
+	print(score)
 # Update P(W|H)
 #	- Foreach sentence
 #	- Process H as necessary (smoothH or otherwise)
