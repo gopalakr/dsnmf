@@ -64,14 +64,15 @@ def reconstructV(W,H):
 def reconstructV_dsnmf(Wstream,Hstream):
 	rdim=np.shape(Hstream)[0]
 	ncols=np.shape(Hstream)[1]
-	twin=np.shape(np.squeeze(Wstream[0,:,:,:]))[2]
-	ndim=np.shape(np.squeeze(Wstream[0,:,:,:]))[0]
+	twin=np.shape(np.squeeze(Wstream[0]))[2]
+	ndim=np.shape(np.squeeze(Wstream[0]))[0]
 	V=np.zeros((ndim,twin-1),float)
-	for i in range(twin,ncols):
-		witr=np.squeeze(Wstream[i,:,:,:])
-		htmp=Hstream[np.arange(i-twin,i+1)]
+	for i in range(twin,ncols+1):
+		witr=np.squeeze(Wstream[i-1])
+		htmp=Hstream[:,np.arange(i-twin,i)]
 		vtmp=reconstructV(witr,htmp)
-		V=np.hstack(V,np.squeeze(vtmp[:,twin-1]))
+		vtmp=np.transpose(np.asmatrix(vtmp[:,twin-1]))
+		V=np.hstack((V,vtmp))
 	return V
 
 #Update H given W
@@ -146,20 +147,24 @@ def UpdateWstream(V, Vhat, Wstream, Hstream):
 	return newWstream
 
 #UpdateH stream for dsnmf
-def UpdateHstream(V,Vhat,Wstream,Hstream):
-	ndim=np.shape(V)[0]
-	rdim=np.shape(H)[0]
-	twin=np.shape(np.squeeze(Wstream[0,:,:,:]))[2]
-	ncols=np.shape(H)[1]
-	newHstream=[]
-	for i in range(ncols-twin+1):
-		wi=np.squeeze(Wstream[i,:,:,:])
-		hi=Hstream[:,i:twin+i]
-		vi=V[:,i:i+twin]
-		vhat=Vhat[:,i:i+twin]
-		newH=UpdateH(vi,vhat,wi,hi)
-		newHstream.append(newH)
-	newHstream.append(np.zeros(rdim,twin))
+def UpdateHstream(v,wstream,hstream):
+	ndim=np.shape(v)[0]
+	rdim=np.shape(hstream)[0]
+	twin=np.shape(np.squeeze(wstream[0]))[2]
+	ncols=np.shape(hstream)[1]
+	newHstream=np.zeros((rdim,ncols),float)
+	newHcnt=np.zeros((rdim,ncols),int)
+	score=0
+	for i in range(ncols-twin-1):
+		wi=np.squeeze(wstream[i])
+		hi=hstream[:,i:twin+i]
+		vi=v[:,i:i+twin]
+		for itr in range(10):
+			vhattmp=reconstructV(wi,hi)
+			hi=updateH(vi,vhattmp,wi,hi)
+			score=np.linalg.norm(np.subtract(vi,vhattmp))
+		newH=hi
+		newHstream[:,i]=newH[:,0]
 	return newHstream
 
 def dsnmf_updates(alldata,allpred,alldatawstream,alldatahstream):
@@ -208,7 +213,7 @@ def dsnmf_updates(alldata,allpred,alldatawstream,alldatahstream):
 		wstream=np.squeeze(alldatawstream[i,:,:,:,:])
 		v=np.squeeze(alldata[i,:,:])
 		vhat=np.squeeze(allpred[i,:,:])
-		alldatahstream[i,:,:]=UpdateHstream(v,vhat,wstream,hstream)
+		alldatahstream[i,:,:]=UpdateHstream(v,wstream,hstream)
 	
 	#ReconstructV for all sentences allpred
 	allpred=[]
@@ -352,23 +357,27 @@ V=np.transpose(V)
 #	- Foreach sentence
 # 	- Estimate W tensor from trained network
 #	- Update HgivenW over several iterations
-for itr in range(200):
+for itr in range(4):
 	Vhat,W,H=smaragdis_updates(V,W,H)
 
 allpred=[]
-score=0
+score1=0
+score2=0
 alldatahstream=[]
 alldatawstream=[]
 for i in range(nfiles):
-	nc=np.shape(alldata[i])[1]
+	nc=np.shape(np.squeeze(alldata[i]))[0]
+	v=np.squeeze(alldata[i])
+	v=np.transpose(v)
 	hstream=np.random.rand(rdim,nc)
 	wstream=make_wstream_init(hstream,W)
-	for itr in range(200):
-		vhat=reconstructV_dsnmf(wstream,hstream)
-		v=np.squeeze(alldata[i])
-		hstream=UpdateHstream(v,vhat,wstream,hstream)
-		score+=np.linalg.norm(np.subtract(v,vhat))
-	print(score)
+#	for itr in range(10):
+	vhat=reconstructV_dsnmf(wstream,hstream)
+	score1=np.linalg.norm(np.subtract(v,vhat))
+	hstream=UpdateHstream(v,wstream,hstream)
+	vhat=reconstructV_dsnmf(wstream,hstream)
+	score2=np.linalg.norm(np.subtract(v,vhat))
+	print("before:",score1,"after:",score2)
 
 for itr in range(200):
 	allpred,alldatawstream, alldatahstream, models,score=dsnmf_updates(alldata,allpred,alldatawstream,alldatahstream)
