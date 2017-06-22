@@ -204,8 +204,10 @@ def dsnmf_updates(alldata,allpred,alldatawstream,alldatahstream,ndim,rdim,twin):
 		configs.append(config)
 	#Predict Wstream over all sentences
 	for i in range(nfiles):
+		allX=np.empty((0,((2*twin))*rdim),float)
 		hstream=np.squeeze(alldatahstream[i])
 		tmpa=make_testdata(hstream,twin)
+		allX=np.vstack((allX,tmpa))
 		tmpb=predictws(tmpa,configs,models,ndim,rdim,twin)
 		alldatawstream[i]=tmpb
 	#ReconstructV for all sentences
@@ -238,14 +240,15 @@ def dsnmf_updates(alldata,allpred,alldatawstream,alldatahstream,ndim,rdim,twin):
 ## Misc functions
 def predictws(xdata,configs,models,ndim,rdim,twin):
 	nf=np.shape(xdata)[0]
+	print(np.shape(xdata))
 	wstream=np.empty((nf,ndim,rdim,twin))
 	for i in range(rdim):
 		ws=np.squeeze(models[i])
 		config=configs[i]
 		tmpmodel=Sequential.from_config(config)
-		tmpmodel.set_weights(ws)
+		tmpmodel.set_weights(np.asarray(ws))
 		tmpw=test_dnn(xdata,tmpmodel)
-		tmpw.reshape(nf,ndim,twin)
+		tmpw=tmpw.reshape(nf,ndim,twin)
 		wstream[:,:,i,:]=tmpw
 	return wstream
 
@@ -303,12 +306,12 @@ def make_traindata(wstream,hstream,padwin):
 def make_testdata(hstream,padwin):
 	ncols=np.shape(hstream)[1]
 	rdim=np.shape(hstream)[0]
-	Xtr=[]
+	Xtr=np.empty((0,rdim*(2*padwin)))
 	for i in range(padwin,ncols-padwin):
-		xdat=np.ravel(hstream[:,i-padwin:i+padwin])
+		xdat=np.ravel(np.squeeze(hstream[:,i-padwin:i+padwin]))
 		#ydat=np.flatten(np.squeeze(wstream[i,:,:,:]))
-		Xtr.append(np.asarray(xdat))
-	Xtr.append(np.zeros((padwin,rdim*((2*padwin)-1))))
+		Xtr=np.vstack((Xtr,np.asmatrix(xdat)))
+	Xtr=np.vstack((Xtr,(np.zeros((padwin,rdim*((2*padwin)))))))
 	return Xtr
 
 	
