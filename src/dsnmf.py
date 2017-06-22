@@ -167,10 +167,10 @@ def UpdateHstream(v,wstream,hstream):
 		newHstream[:,i]=newH[:,0]
 	return newHstream
 
-def dsnmf_updates(alldata,allpred,alldatawstream,alldatahstream,twin):
+def dsnmf_updates(alldata,allpred,alldatawstream,alldatahstream,ndim,rdim,twin):
 	nfiles=np.shape(alldata)[0]
-	allX=[]
-	allY=[]
+	allX=np.empty((0,((2*twin)+1)*rdim),float)
+	allY=np.empty((0,ndim,rdim,twin),float)
 	models=[]
 	rdim=np.shape(alldatahstream[0])[0]
 	for i in range(nfiles):
@@ -181,13 +181,19 @@ def dsnmf_updates(alldata,allpred,alldatawstream,alldatahstream,twin):
 		v=np.transpose(v)
 		updateWstream(v,vhat,wstream,hstream)
 		tmpa,tmpb=make_traindata(wstream,hstream,twin)
-		allX.append(tmpa)
-		allY.append(tmpb)
+		print(np.shape(tmpa),np.shape(tmpb))
+		print(np.shape(tmpa),np.shape(tmpb))
+		#allX.append(tmpa)
+		#allY.append(tmpb)
+		allX=np.vstack((allX,tmpa))
+		allY=np.vstack((allY,tmpa))
 	#Train P(W|H) over all training data
-	nx=np.shape(tmpb)[0]
-	ndim=np.shape(tmpb)[1]
-	rdim=np.shape(tmpb)[3]
-	twin=np.shape(tmpb)[4]
+	nx=np.shape(allX)[0]
+	print(np.shape(allX))
+	print(np.shape(allY))
+	#ndim=np.shape(tmpb)[1]
+	#rdim=np.shape(tmpb)[3]
+	#twin=np.shape(tmpb)[4]
 	for i in range(rdim):
 		tmpallY=allY[:,:,i,:].reshape(nx,ndim*twin)
 		tmpmodel=train_dnn(allX,tmpallY)
@@ -282,8 +288,8 @@ def make_traindata(wstream,hstream,padwin):
 		xdat=np.ravel(np.squeeze(hstream[:,i-padwin:i+padwin]))
 		ydat=np.squeeze(wstream[i,:,:,:])
 		#ydat=np.flatten(np.squeeze(wstream[i,:,:,:]))
-		Xtr.append(np.asarray(Xtr))
-		Ytr.append(np.asarray(Ytr))
+		Xtr.append(np.asarray(xdat))
+		Ytr.append(ydat)
 
 	return Xtr, Ytr
 
@@ -380,7 +386,7 @@ for i in range(nfiles):
 	print("before:",score1,"after:",score2)
 
 for itr in range(200):
-	allpred,alldatawstream, alldatahstream, models,score=dsnmf_updates(alldata,allpred,alldatawstream,alldatahstream,twin)
+	allpred,alldatawstream, alldatahstream, models,score=dsnmf_updates(alldata,allpred,alldatawstream,alldatahstream,ndim,rdim,twin)
 	print(score)
 # Update P(W|H)
 #	- Foreach sentence
