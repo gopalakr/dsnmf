@@ -214,7 +214,7 @@ def dsnmf_updates(alldata,allpred,alldatawstream,alldatahstream,ndim,rdim,twin):
 	allpred=[]
 	for i in range(nfiles):
 		hstream=np.squeeze(alldatahstream[i])
-		wstream=alldatawstream(i)
+		wstream=alldatawstream[i]
 		predv=reconstructV_dsnmf(wstream,hstream)
 		allpred.append(predv)
 	#UpdateH for all sentences
