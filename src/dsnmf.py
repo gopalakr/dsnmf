@@ -169,9 +169,10 @@ def UpdateHstream(v,wstream,hstream):
 
 def dsnmf_updates(alldata,allpred,alldatawstream,alldatahstream,ndim,rdim,twin):
 	nfiles=np.shape(alldata)[0]
-	allX=np.empty((0,((2*twin)+1)*rdim),float)
+	allX=np.empty((0,((2*twin))*rdim),float)
 	allY=np.empty((0,ndim,rdim,twin),float)
 	models=[]
+	configs=[]
 	rdim=np.shape(alldatahstream[0])[0]
 	for i in range(nfiles):
 		wstream=np.squeeze(alldatawstream[i])
@@ -182,11 +183,11 @@ def dsnmf_updates(alldata,allpred,alldatawstream,alldatahstream,ndim,rdim,twin):
 		updateWstream(v,vhat,wstream,hstream)
 		tmpa,tmpb=make_traindata(wstream,hstream,twin)
 		print(np.shape(tmpa),np.shape(tmpb))
-		print(np.shape(tmpa),np.shape(tmpb))
+		print(np.shape(allX),np.shape(allY))
 		#allX.append(tmpa)
 		#allY.append(tmpb)
 		allX=np.vstack((allX,tmpa))
-		allY=np.vstack((allY,tmpa))
+		allY=np.vstack((allY,tmpb))
 	#Train P(W|H) over all training data
 	nx=np.shape(allX)[0]
 	print(np.shape(allX))
@@ -197,12 +198,15 @@ def dsnmf_updates(alldata,allpred,alldatawstream,alldatahstream,ndim,rdim,twin):
 	for i in range(rdim):
 		tmpallY=allY[:,:,i,:].reshape(nx,ndim*twin)
 		tmpmodel=train_dnn(allX,tmpallY)
-		models.append(tmpmodel)
+		config=tmpmodel.get_config()
+		ws=tmpmodel.get_weights()
+		models.append(ws)
+		configs.append(config)
 	#Predict Wstream over all sentences
 	for i in range(nfiles):
 		hstream=np.squeeze(alldatahstream[i])
 		tmpa=make_testdata(hstream,twin)
-		tmpb=predictws(tmpa,models,ndim,rdim,twin)
+		tmpb=predictws(tmpa,configs,models,ndim,rdim,twin)
 		alldatawstream[i]=tmpb
 	#ReconstructV for all sentences
 	allpred=[]
@@ -223,7 +227,7 @@ def dsnmf_updates(alldata,allpred,alldatawstream,alldatahstream,ndim,rdim,twin):
 	allpred=[]
 	score=0
 	for i in range(nfiles):
-		hstream=np.squeeze(alldatahstream[i,:,:])
+		hstream=np.squeeze(alldatahstream[i])
 		wstream=alldatawstream[i]
 		v=alldata[i]
 		predv=reconstructV_dsnmf(wstream,hstream)
@@ -232,11 +236,14 @@ def dsnmf_updates(alldata,allpred,alldatawstream,alldatahstream,ndim,rdim,twin):
 	return allpred,alldatawstream, alldatahstream, models, score
 
 ## Misc functions
-def predictws(xdata,models,ndim,rdim,twin):
+def predictws(xdata,configs,models,ndim,rdim,twin):
 	nf=np.shape(xdata)[0]
 	wstream=np.empty((nf,ndim,rdim,twin))
 	for i in range(rdim):
-		tmpmodel=models(i)
+		ws=np.squeeze(models[i])
+		config=configs[i]
+		tmpmodel=Sequential.from_config(config)
+		tmpmodel.set_weights(ws)
 		tmpw=test_dnn(xdata,tmpmodel)
 		tmpw.reshape(nf,ndim,twin)
 		wstream[:,:,i,:]=tmpw
@@ -296,13 +303,13 @@ def make_traindata(wstream,hstream,padwin):
 def make_testdata(hstream,padwin):
 	ncols=np.shape(hstream)[1]
 	rdim=np.shape(hstream)[0]
-	Xtr=np.zeros((padwin,rdim*((2*padwin)-1)))
+	Xtr=[]
 	for i in range(padwin,ncols-padwin):
-		xdat=np.flatten(hstream[:,i-padwin:i+padwin])
+		xdat=np.ravel(hstream[:,i-padwin:i+padwin])
 		#ydat=np.flatten(np.squeeze(wstream[i,:,:,:]))
-		Xtr.append(np.asarray(Xtr))
+		Xtr.append(np.asarray(xdat))
 	Xtr.append(np.zeros((padwin,rdim*((2*padwin)-1))))
-	return Xtr()
+	return Xtr
 
 	
 #### Main work #######
