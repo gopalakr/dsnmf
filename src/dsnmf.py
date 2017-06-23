@@ -13,6 +13,7 @@ from sklearn.cluster import KMeans
 from scipy.ndimage.interpolation import shift
 from keras.models import Sequential
 from keras.layers.core import Dense,Activation,Dropout
+from math import sqrt
 
 
 lowval=0
@@ -66,13 +67,12 @@ def reconstructV_dsnmf(Wstream,Hstream):
 	ncols=np.shape(Hstream)[1]
 	twin=np.shape(np.squeeze(Wstream[0]))[2]
 	ndim=np.shape(np.squeeze(Wstream[0]))[0]
-	V=np.zeros((ndim,twin-1),float)
-	for i in range(twin,ncols+1):
-		witr=np.squeeze(Wstream[i-1])
-		htmp=Hstream[:,np.arange(i-twin,i)]
+	V=np.zeros((ndim,ncols),float)
+	for i in range(ncols-twin):
+		witr=np.squeeze(Wstream[i])
+		htmp=Hstream[:,np.arange(i,i+twin)]
 		vtmp=reconstructV(witr,htmp)
-		vtmp=np.transpose(np.asmatrix(vtmp[:,twin-1]))
-		V=np.hstack((V,vtmp))
+		V[:,i:i+twin]+=vtmp
 	return V
 
 #Update H given W
@@ -137,12 +137,13 @@ def updateWstream(V, Vhat, Wstream, Hstream):
 	twin=np.shape(np.squeeze(Wstream[0]))[2]
 	ncols=np.shape(Hstream)[1]
 	newWstream=[]
-	for i in range(ncols-twin+1):
+	for i in range(ncols-twin):
 		wi=np.squeeze(Wstream[i])
 		hi=Hstream[:,i:twin+i]
 		vi=V[:,i:i+twin]
 		vhat=Vhat[:,i:i+twin]
 		newW=UpdateW(vi,vhat,wi,hi)
+		newW[np.isnan(newW)]=lowval
 		newWstream.append(newW)
 	return newWstream
 
@@ -154,17 +155,16 @@ def UpdateHstream(v,wstream,hstream):
 	ncols=np.shape(hstream)[1]
 	newHstream=np.zeros((rdim,ncols),float)
 	newHcnt=np.zeros((rdim,ncols),int)
-	score=0
-	for i in range(ncols-twin-1):
-		wi=np.squeeze(wstream[i])
-		hi=hstream[:,i:twin+i]
-		vi=v[:,i:i+twin]
-		for itr in range(2):
+	for i in range(twin,ncols):
+		wi=np.squeeze(wstream[i-twin])
+		hi=hstream[:,i-twin:i]
+		vi=v[:,i-twin:i]
+		for itr in range(10):
 			vhattmp=reconstructV(wi,hi)
 			hi=updateH(vi,vhattmp,wi,hi)
-			score=np.linalg.norm(np.subtract(vi,vhattmp))
 		newH=hi
-		newHstream[:,i]=newH[:,0]
+		newH[np.isnan(newH)]=lowval
+		newHstream[:,i]=newH[:,twin-1]
 	return newHstream
 
 def dsnmf_updates(alldata,allpred,alldatawstream,alldatahstream,ndim,rdim,twin):
@@ -232,9 +232,11 @@ def dsnmf_updates(alldata,allpred,alldatawstream,alldatahstream,ndim,rdim,twin):
 		hstream=np.squeeze(alldatahstream[i])
 		wstream=alldatawstream[i]
 		v=alldata[i]
+		v=np.transpose(v)
 		predv=reconstructV_dsnmf(wstream,hstream)
-		score+=np.linalg.norm(np.subtract(v,vhat))
+		score+=np.linalg.norm(np.subtract(v,predv))
 		allpred.append(predv)
+	print ("Score:",score)
 	return allpred,alldatawstream, alldatahstream, models, score
 
 ## Misc functions
